@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#0b0d13">
+<meta name="description" content="Tierras de Aethel: MMO RPG cenital en el navegador, con mundo abierto, monstruos, chat y mazmorras.">
+<title>Tierras de Aethel</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%230b0d13'/%3E%3Ccircle cx='16' cy='16' r='10' fill='%233f7a3a'/%3E%3Ccircle cx='11' cy='13' r='3' fill='%23ffe9a8'/%3E%3C/svg%3E">
+<style>
+  :root{
+    --bg:#0b0d13; --panel:rgba(14,17,26,.92); --line:rgba(150,170,220,.22);
+    --ink:#e8eefc; --dim:#9fb0cc; --gold:#ffd166; --hp:#ff5470; --xp:#7fd0ff; --good:#7bffb2;
+    --font: ui-monospace, 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', monospace;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{height:100%; overflow:hidden;}
+  body{background:var(--bg); color:var(--ink); font-family:var(--font); font-size:14px;}
+  button{font:inherit; color:inherit; background:none; border:0; cursor:pointer;}
+  #screen{position:fixed; inset:0; width:100%; height:100%; display:block;}
+  .hidden{display:none !important;}
+
+  /* ---------------------------------- HUD ------------------------------- */
+  #hud{position:fixed; inset:0; pointer-events:none;}
+  .topLeft{position:absolute; top:14px; left:14px; display:flex; flex-direction:column; gap:6px;}
+  .bars{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:8px 12px; width:250px; backdrop-filter:blur(4px);}
+  .barRow{display:flex; align-items:center; gap:8px; margin:3px 0;}
+  .barRow span{font-size:10.5px; color:var(--dim); width:22px;}
+  .bar{flex:1; height:11px; background:#0a0c12; border:1px solid var(--line); border-radius:6px; overflow:hidden; position:relative;}
+  .bar i{position:absolute; inset:0 auto 0 0; display:block;}
+  .bar.hp i{background:linear-gradient(180deg,#ff8fa0,#d92b4c);}
+  .bar.xp i{background:linear-gradient(180deg,#9fdcff,#2a7fd0);}
+  .barText{font-size:10.5px; color:var(--dim);}
+  .zone{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:7px 12px; backdrop-filter:blur(4px);}
+  .zone b{color:var(--gold);}
+  .zone small{display:block; color:var(--dim); font-size:11px; margin-top:2px;}
+
+  .topRight{position:absolute; top:14px; right:14px; display:flex; flex-direction:column; gap:8px; align-items:flex-end;}
+  #chatLog{width:330px; max-height:190px; overflow:auto; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:8px 10px; backdrop-filter:blur(4px);}
+  .chatLine{font-size:12px; line-height:1.5; word-break:break-word;}
+  .chatLine.sys{color:var(--dim); font-style:italic;}
+  .chatLine.say{color:#d8e6ff;}
+  #chatInputRow{margin-top:6px; width:330px;}
+  #chatInput{width:100%; padding:8px 12px; border-radius:9px; border:1px solid var(--line); background:var(--panel); color:var(--ink); font:inherit; outline:none;}
+  #chatInput:focus{border-color:var(--gold);}
+
+  .bottom{position:absolute; bottom:14px; left:14px; display:flex; gap:8px; flex-wrap:wrap; pointer-events:auto;}
+  .key{background:var(--panel); border:1px solid var(--line); border-radius:9px; padding:7px 12px; font-size:12px; color:var(--dim); backdrop-filter:blur(4px);}
+  .key b{color:var(--ink);}
+  #toast{position:absolute; left:50%; bottom:70px; transform:translateX(-50%); background:var(--panel); border:1px solid var(--line);
+    border-radius:999px; padding:8px 20px; color:var(--gold); font-size:13px; backdrop-filter:blur(4px);}
+  #status{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); background:var(--panel); border:1px solid var(--line);
+    border-radius:12px; padding:16px 26px; color:var(--gold);}
+
+  #deadOverlay{position:absolute; inset:0; background:rgba(40,4,10,.55); display:grid; place-items:center; text-align:center;}
+  #deadOverlay h2{font-size:30px; color:#ff8fa8; letter-spacing:.2em;}
+  #deadOverlay p{color:#ffd8e0; margin:8px 0 14px;}
+  .btn{pointer-events:auto; padding:9px 22px; border-radius:999px; border:1px solid var(--line); background:rgba(30,36,54,.9); color:var(--ink); font-weight:700; letter-spacing:.08em; font-size:12.5px;}
+  .btn:hover{border-color:var(--gold); color:var(--gold);}
+
+  /* -------------------------------- PANELES ----------------------------- */
+  .panel{position:fixed; top:70px; right:14px; width:360px; max-height:70vh; overflow:auto; background:var(--panel);
+    border:1px solid var(--line); border-radius:12px; padding:14px 16px; backdrop-filter:blur(6px); z-index:5;}
+  .panel h3{font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:var(--dim); margin:12px 0 6px;}
+  .panel h3:first-child{margin-top:0;}
+  .kv div{display:flex; justify-content:space-between; border-bottom:1px dotted var(--line); padding:3px 0; font-size:13px;}
+  .kv b{color:var(--gold);}
+  .list .row{display:flex; align-items:center; gap:8px; border-bottom:1px dotted var(--line); padding:5px 0; font-size:12.5px;}
+  .list .nm{flex:1;}
+  .list .nm i{color:var(--dim); font-style:normal; font-size:11px;}
+  .mini{border:1px solid var(--line); border-radius:7px; padding:3px 9px; font-size:11px; color:var(--dim);}
+  .mini:hover{border-color:var(--gold); color:var(--gold);}
+  .dim{color:var(--dim); font-size:12px;}
+  .money{font-size:13px; color:var(--dim); margin-bottom:8px;}
+  .money b{color:var(--gold);}
+  .panelClose, #btnShopClose, #btnMapClose{position:absolute; top:10px; right:12px; color:var(--dim); font-size:16px; border:0;}
+
+  #bigMap{position:fixed; inset:0; background:rgba(5,6,10,.9); display:grid; place-items:center; z-index:8;}
+  #bigMap .wrap{position:relative; background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px;}
+  #mapCanvas{width:min(78vw,760px); height:min(78vw,760px); display:block; background:#0a0c12; border-radius:8px;}
+  #bigMap h3{font-size:12px; letter-spacing:.16em; color:var(--dim); margin-bottom:8px; text-transform:uppercase;}
+  #helpBox{position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); z-index:9; background:var(--panel);
+    border:1px solid var(--line); border-radius:14px; padding:18px 22px; max-width:520px; backdrop-filter:blur(6px);}
+  #helpBox h3{color:var(--gold); margin-bottom:8px; font-size:14px; letter-spacing:.1em;}
+  #helpBox ul{list-style:none; font-size:13px; line-height:1.9; color:var(--dim);}
+  #helpBox b{color:var(--ink);}
+
+  /* --------------------------------- MENÚ ------------------------------- */
+  #menu{position:fixed; inset:0; display:grid; place-items:center; background:
+    radial-gradient(900px 500px at 50% -10%, #1b2440 0%, transparent 60%),
+    linear-gradient(160deg,#0b0d13,#0a0c16 60%,#07080e); z-index:20;}
+  .menuBox{text-align:center; padding:24px; max-width:640px;}
+  .menuBox h1{font-size:clamp(26px,5vw,46px); letter-spacing:.2em; color:#fff; text-shadow:0 0 24px rgba(255,209,102,.35);}
+  .menuBox .sub{color:var(--dim); margin:10px 0 20px; font-size:13px;}
+  .classes{display:flex; gap:10px; justify-content:center; margin-bottom:14px; flex-wrap:wrap;}
+  .classBtn{border:1px solid var(--line); border-radius:12px; padding:10px 16px; min-width:130px; text-align:center; background:rgba(20,24,36,.8);}
+  .classBtn b{display:block; font-size:14px; letter-spacing:.06em;}
+  .classBtn i{font-style:normal; font-size:11px; color:var(--dim);}
+  .classBtn.sel{border-color:var(--gold); box-shadow:0 0 0 1px var(--gold);}
+  .classBtn.g b{color:#e07a5a;} .classBtn.m b{color:#8f7bd8;} .classBtn.p b{color:#5ad8a0;}
+  #nameInput{margin:6px 0 14px; padding:9px 14px; width:240px; border-radius:9px; border:1px solid var(--line); background:rgba(14,17,26,.9); color:var(--ink); font:inherit; outline:none;}
+  #nameInput:focus{border-color:var(--gold);}
+  .menuBox .note{color:var(--dim); font-size:11.5px; margin-top:14px; line-height:1.7;}
+</style>
+</head>
+<body>
+<canvas id="screen"></canvas>
+
+<div id="hud" class="hidden">
+  <div class="topLeft">
+    <div class="bars">
+      <div class="barRow"><span>VID</span><div class="bar hp"><i id="hpFill"></i></div><span class="barText" id="hpText">0 / 0</span></div>
+      <div class="barRow"><span>EXP</span><div class="bar xp"><i id="xpFill"></i></div><span class="barText" id="lvText">nv 1</span></div>
+    </div>
+    <div class="zone">
+      <b id="zoneText">Tierras salvajes</b>
+      <small><span id="onlineText">1 jugador</span> · Oro: <b id="goldText">0</b></small>
+    </div>
+  </div>
+
+  <div class="topRight">
+    <div id="chatLog"></div>
+    <div id="chatInputRow" class="hidden"><input id="chatInput" maxlength="140" placeholder="Escribe y pulsa Enter..." autocomplete="off"></div>
+  </div>
+
+  <div class="bottom">
+    <span class="key"><b>WASD</b> moverse</span>
+    <span class="key"><b>Espacio</b> atacar</span>
+    <span class="key"><b>F</b> recolectar</span>
+    <span class="key"><b>E</b> usar / entrar</span>
+    <span class="key"><b>G</b> tienda</span>
+    <span class="key"><b>I</b> inventario</span>
+    <span class="key"><b>C</b> personaje</span>
+    <span class="key"><b>M</b> mapa</span>
+    <span class="key"><b>Enter</b> chat</span>
+    <span class="key"><b>H</b> ayuda</span>
+  </div>
+
+  <div id="toast" class="hidden"></div>
+  <div id="status" class="hidden"></div>
+
+  <div id="deadOverlay" class="hidden">
+    <div>
+      <h2>HAS CAÍDO</h2>
+      <p id="deadText"></p>
+      <button class="btn" id="btnRespawn">Reaparecer</button>
+    </div>
+  </div>
+</div>
+
+<div id="panel" class="panel hidden"><button class="panelClose">✕</button><div id="panelBody"></div></div>
+<div id="shopPanel" class="panel hidden"><button id="btnShopClose">✕</button><h3>Mercader</h3><div id="shopBody"></div><button class="btn" id="btnRest" style="margin-top:12px">Descansar en la posada (15 oro)</button></div>
+
+<div id="bigMap" class="hidden">
+  <div class="wrap">
+    <button id="btnMapClose">✕</button>
+    <h3>Mapa de Aethel</h3>
+    <canvas id="mapCanvas" width="760" height="760"></canvas>
+  </div>
+</div>
+
+<div id="helpBox" class="hidden">
+  <h3>CÓMO JUGAR</h3>
+  <ul>
+    <li><b>Muévete</b> con WASD o las flechas. El mundo entero está abierto.</li>
+    <li><b>Ataca</b> con Espacio al monstruo más cercano. Si no hay ninguno, no pasa nada.</li>
+    <li><b>Recolecta</b> con F sobre árboles, hierba o vetas de piedra para subir tus oficios.</li>
+    <li><b>E</b> entra en una mazmorra si estás sobre su boca, o abre la tienda en un pueblo.</li>
+    <li><b>G</b> abre el mercader y la posada cuando estés en una zona segura.</li>
+    <li><b>Enter</b> abre el chat: hablas con todos los jugadores conectados.</li>
+    <li>Los pueblos son <b>zonas seguras</b>: los monstruos no te atacan dentro.</li>
+    <li>Si caes, pierdes el control cuatro segundos y reapareces en Robledal.</li>
+  </ul>
+</div>
+
+<div id="menu">
+  <div class="menuBox">
+    <h1>TIERRAS DE AETHEL</h1>
+    <p class="sub">Mundo abierto, monstruos con vida propia y otros jugadores dentro. Vista cenital, sin descargas.</p>
+    <div class="classes">
+      <button class="classBtn g sel" data-cls="guerrero"><b>Guerrero</b><i>vida alta, defensa</i></button>
+      <button class="classBtn m" data-cls="mago"><b>Maga</b><i>ataque mágico</i></button>
+      <button class="classBtn p" data-cls="picaro"><b>Pícara</b><i>el más rápido</i></button>
+    </div>
+    <input id="nameInput" maxlength="16" placeholder="Tu nombre" autocomplete="off">
+    <div><button class="btn" id="btnPlay">Entrar en Aethel</button></div>
+    <p class="note">Muevete con <b>WASD</b> · Ataca con <b>Espacio</b> · Recolecta con <b>F</b> · Chat con <b>Enter</b><br>
+    El servidor mueve el mundo; tú solo envías lo que quieres hacer.</p>
+  </div>
+</div>
+
+<script src="shared/game-data.js"></script>
+<script src="client/net.js"></script>
+<script src="client/main.js"></script>
+<script src="client/ui.js"></script>
+</body>
+</html>
