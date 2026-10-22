@@ -1,0 +1,13 @@
+{
+  "name": "tierras-de-aethel",
+  "version": "1.0.0",
+  "private": true,
+  "description": "MMO RPG cenital en el navegador con servidor autoritativo, sin dependencias",
+  "main": "server/server.js",
+  "scripts": {
+    "start": "node server/server.js",
+    "test": "node tests/harness.js"
+  },
+  "engines": { "node": ">=16" },
+  "license": "MIT"
+}
